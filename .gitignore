@@ -1,0 +1,78 @@
+# =========================
+# Datasets
+# =========================
+fma_medium/
+fma_metadata/
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# ML artifacts
+# =========================
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.keras
+
+results/checkpoints/
+
+# =========================
+# Cached features
+# =========================
+cache/
+*.npy
+*.npz
+*.pkl
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Experiment outputs
+# =========================
+results/metrics/
+results/figures/
+
+# =========================
+# IDE / OS
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+.DS_Store
+Thumbs.db
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+*output.md
+
+# =========================
+# Python package metadata
+# =========================
+*.egg-info/
