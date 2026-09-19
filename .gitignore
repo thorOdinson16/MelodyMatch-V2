@@ -51,7 +51,6 @@ logs/
 # =========================
 # Experiment outputs
 # =========================
-results/metrics/
 results/figures/
 
 # =========================

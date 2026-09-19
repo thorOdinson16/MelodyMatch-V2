@@ -1,0 +1,2 @@
+model,best_epoch,best_val_macro_f1,test_loss,test_accuracy,test_balanced_accuracy,test_macro_f1,test_weighted_f1,trainable_parameters,metadata_dimension
+CNN + Transformer + Metadata,18,0.29476256513978727,2.1954742633907087,0.4097978227060653,0.32211378676118185,0.2938448741683008,0.4491750839501503,3173840,86
