@@ -76,3 +76,8 @@ Thumbs.db
 # Python package metadata
 # =========================
 *.egg-info/
+
+# =========================
+# Generated baseline feature datasets
+# =========================
+data/clean_*_features.csv
