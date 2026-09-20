@@ -75,3 +75,16 @@ Thumbs.db
 # Generated baseline feature datasets
 # =========================
 data/clean_*_features.csv
+
+# =========================
+# LaTeX build files
+# =========================
+*.aux
+*.out
+*.log
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz

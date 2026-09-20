@@ -1,0 +1,758 @@
+% MelodyMatch-V2 Research Report
+% Compile with: pdflatex report.tex (run twice for references/table of contents as needed)
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{longtable}
+
+\usepackage{url}
+
+% Figures are stored in results/figures relative to this report.
+\graphicspath{{../results/figures/}{results/figures/}}
+
+\newcommand{\reportfigure}[3][0.85\textwidth]{%
+\begin{figure}[H]
+\centering
+\includegraphics[width=#1]{#2}
+\caption{#3}
+\label{fig:#2}
+\end{figure}
+}
+
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\title{\textbf{MelodyMatch-V2: A Systematic Study of Music Genre Classification on the FMA Medium Dataset}}
+\author{
+Abhijna DS\\
+PES University, Bengaluru, India
+}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Music genre classification is a challenging multi-class learning problem because musical genres overlap substantially in acoustic characteristics and real-world datasets are often highly imbalanced. This report presents MelodyMatch-V2, a research-oriented study of automatic music genre classification using the FMA Medium dataset. The study evaluates traditional machine-learning baselines based on the provided FMA features and deep-learning models operating directly on 30-second Mel spectrograms. The evaluated models include Logistic Regression, an RBF-kernel Support Vector Machine, a multilayer perceptron, a convolutional neural network (CNN), CNN+BiLSTM, CNN+Transformer, CNN+Transformer with metadata fusion, and CNN+BiLSTM with attention. In addition, several class-imbalance and regularization strategies are investigated, including smoothed class weights, SpecAugment, Mixup, Focal Loss, balanced sampling, and a two-stage decoupled training procedure.
+
+The final dataset contains 24,980 usable tracks across 16 genres after audio validation and removal of 15 invalid files and five extreme-duration outliers. The official FMA train/validation/test split is retained, resulting in 19,904 training tracks, 2,504 validation tracks, and 2,572 test tracks. The experiments show that increasing architectural complexity does not necessarily improve genre classification performance. The CNN baseline achieves 60.61\% test accuracy, 51.58\% balanced accuracy, and 45.27\% macro-F1. CNN+BiLSTM and CNN+Transformer models perform below the CNN baseline. Among the investigated methods, decoupled training produces the strongest overall deep-learning result, achieving 62.52\% accuracy, 54.37\% balanced accuracy, 45.65\% macro-F1, and 64.50\% weighted-F1. The results indicate that classifier adaptation to severe class imbalance can be more beneficial than simply increasing temporal or architectural complexity.
+\end{abstract}
+
+\section{Introduction}
+
+Automatic music genre classification aims to assign an audio recording to one or more predefined genre categories based on its acoustic characteristics. Genre classification is useful for music recommendation, catalog organization, search, playlist generation, digital music libraries, and downstream music-information-retrieval systems.
+
+Despite appearing to be a relatively straightforward classification problem, music genre recognition is difficult for several reasons. Genres are not defined by a single acoustic property. A recording can simultaneously exhibit characteristics associated with rhythm, instrumentation, timbre, harmony, production style, vocal content, and cultural context. Closely related genres may therefore have highly overlapping acoustic representations. A second challenge is class imbalance: some genres occur thousands of times in a dataset while others contain only a few dozen examples. Consequently, overall accuracy can conceal poor performance on minority classes.
+
+MelodyMatch-V2 is the research-focused continuation of the original MelodyMatch project. The original project used the FMA Small dataset, containing 8,000 tracks across eight genres. MelodyMatch-V2 expands the study to FMA Medium and redesigns the experimental pipeline around systematic dataset validation, official dataset splits, Mel-spectrogram representations, multiple neural architectures, metadata fusion, and explicit imbalance experiments.
+
+The study addresses two primary research questions:
+
+\begin{enumerate}
+    \item \textbf{RQ1:} How do CNN, CNN+BiLSTM, and CNN+Transformer architectures compare for music genre classification?
+    \item \textbf{RQ2:} Does adding track-level metadata to a CNN+Transformer audio model improve classification performance?
+\end{enumerate}
+
+A secondary experimental objective is to investigate whether strategies designed for severe class imbalance can improve the CNN baseline. These experiments include class-weight smoothing, balanced sampling, Focal Loss, SpecAugment, Mixup, and decoupled training.
+
+The central principle of the study is that the final model should be selected from empirical evidence rather than from an assumed target accuracy. All reported test-set metrics are obtained after the experimental design and model-selection procedure, and the test set is not used for hyperparameter tuning.
+
+\section{Related Work}
+
+Music genre classification has traditionally used hand-engineered or precomputed acoustic descriptors such as spectral features, chroma features, rhythm descriptors, and timbral statistics. Classical classifiers including linear models, support vector machines, and multilayer perceptrons can provide strong baselines when such representations are available.
+
+Deep learning has enabled models to learn representations directly from time-frequency audio representations. Convolutional neural networks are particularly suitable for Mel spectrograms because local convolutional filters can learn frequency-time patterns associated with timbre, rhythm, and other acoustic structures. Recurrent neural networks can subsequently model temporal dependencies, while Transformer encoders provide self-attention-based sequence modeling.
+
+The Free Music Archive (FMA) dataset provides a standardized benchmark for music-information-retrieval research. FMA contains audio tracks together with metadata and precomputed features, enabling comparisons between feature-based machine learning and audio-based deep learning.
+
+This work does not assume that greater architectural complexity necessarily produces better performance. Instead, it compares architectures and training strategies under a common data split and evaluation protocol.
+
+\section{Dataset}
+
+\subsection{FMA Medium}
+
+The study uses the FMA Medium subset. The local audio collection initially contains 25,000 tracks. The metadata contains substantially more tracks because the complete FMA metadata tables describe tracks that are not all present in the local Medium audio collection.
+
+The dataset contains 16 genre classes:
+
+\begin{table}[H]
+\centering
+\caption{Final class distribution after dataset cleaning.}
+\label{tab:class_distribution}
+\begin{tabular}{lr}
+\toprule
+Genre & Tracks\\
+\midrule
+Blues & 74\\
+Classical & 619\\
+Country & 178\\
+Easy Listening & 21\\
+Electronic & 6,311\\
+Experimental & 2,250\\
+Folk & 1,518\\
+Hip-Hop & 2,192\\
+Instrumental & 1,349\\
+International & 1,018\\
+Jazz & 384\\
+Old-Time / Historic & 510\\
+Pop & 1,186\\
+Rock & 7,098\\
+Soul-RnB & 154\\
+Spoken & 118\\
+\midrule
+Total & 24,980\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The distribution is highly skewed. Rock and Electronic contain thousands of examples, while Easy Listening contains only 21 tracks. This imbalance motivates the use of macro-averaged metrics and dedicated imbalance experiments.
+
+\reportfigure{genre_distribution.png}{Distribution of the 24,980 tracks across the 16 genre classes after dataset cleaning. The strong class imbalance motivates the use of balanced accuracy and macro-F1 in addition to accuracy.}
+
+\reportfigure{dataset_cleaning_summary.png}{Summary of the dataset cleaning process, including invalid audio files and extreme-duration outliers removed from the initial 25,000 locally available tracks.}
+
+\subsection{Official Dataset Splits}
+
+The study uses the official split assignments provided in the FMA metadata rather than randomly redistributing tracks. The local audio files were joined with the metadata using track identifiers.
+
+The final clean split contains:
+
+\begin{table}[H]
+\centering
+\caption{Final dataset split.}
+\label{tab:splits}
+\begin{tabular}{lr}
+\toprule
+Split & Tracks\\
+\midrule
+Training & 19,904\\
+Validation & 2,504\\
+Test & 2,572\\
+\midrule
+Total & 24,980\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No genre-label mismatches or tracks without a split assignment were found during the split validation stage.
+
+\subsection{Audio Validation and Cleaning}
+
+All 25,000 locally available audio files were checked for readability and duration. Fifteen files were found to be invalid or unreadable. Five additional valid files had durations below ten seconds and were treated as extreme-duration outliers. The five short files were consecutive Hip-Hop tracks in the local collection.
+
+The cleaning process therefore removed 20 tracks:
+
+\begin{itemize}
+    \item 15 invalid or unreadable audio files;
+    \item 5 extreme-duration tracks shorter than 10 seconds.
+\end{itemize}
+
+The audio files themselves were not modified or deleted as part of the duration-outlier decision. The exclusions were recorded in the cleaned manifests.
+
+The resulting dataset contains 24,980 usable tracks.
+
+\section{Data Representation}
+
+\subsection{Audio Preprocessing}
+
+Each audio track is converted to a fixed 30-second mono waveform at a sampling rate of 22,050 Hz. The number of waveform samples is therefore
+
+\[
+N = 22050 \times 30 = 661500.
+\]
+
+Audio shorter than the target duration is padded, while audio longer than the target duration is truncated.
+
+Mel spectrograms are computed using:
+
+\begin{itemize}
+    \item 128 Mel frequency bins;
+    \item FFT size of 2048;
+    \item hop length of 512;
+    \item frequency range of 20--11,025 Hz;
+    \item power spectrogram with power exponent 2.0.
+\end{itemize}
+
+The power Mel spectrogram is converted to the decibel scale and normalized independently for each spectrogram using z-score normalization:
+
+\[
+\hat{X} = \frac{X-\mu_X}{\sigma_X}.
+\]
+
+The resulting tensor has shape
+
+\[
+[1,128,1292],
+\]
+
+where the first dimension represents the audio channel, the second represents Mel frequency bins, and the third represents time frames.
+
+The Mel spectrograms are precomputed and stored in a local cache to avoid repeating audio decoding and feature extraction during every training epoch.
+
+\subsection{Traditional Machine-Learning Representation}
+
+The traditional baselines use the features provided by FMA in \texttt{features.csv}. The feature table contains 518 feature columns after loading the three-level metadata header.
+
+The feature rows are joined with the frozen cleaned train, validation, and test manifests using track ID. All 19,904 training tracks, 2,504 validation tracks, and 2,572 test tracks have corresponding feature rows.
+
+\section{Models}
+
+\subsection{Traditional Baselines}
+
+Three traditional models are evaluated.
+
+\subsubsection{Logistic Regression}
+
+A multinomial Logistic Regression classifier is trained after StandardScaler normalization. Class-weighted training is used to compensate for the imbalanced class distribution. The optimization uses LBFGS with a maximum of 2,000 iterations.
+
+\subsubsection{Support Vector Machine}
+
+An RBF-kernel SVM is trained using standardized features. The configuration uses
+
+\[
+C=10,\qquad \gamma=\text{scale},
+\]
+
+with balanced class weights and a large kernel cache.
+
+\subsubsection{Multilayer Perceptron}
+
+The MLP architecture is
+
+\[
+518 \rightarrow 512 \rightarrow 256 \rightarrow 128 \rightarrow 16.
+\]
+
+Batch normalization, ReLU activations, and dropout are used between hidden layers. The model is trained using AdamW with learning rate \(10^{-3}\) and weight decay \(10^{-4}\). A validation-based learning-rate scheduler and early stopping are used.
+
+\subsection{CNN Baseline}
+
+The CNN operates directly on Mel spectrograms. The feature extractor consists of four convolutional blocks:
+
+\[
+1\rightarrow32\rightarrow64\rightarrow128\rightarrow256.
+\]
+
+Each block uses convolution, batch normalization, ReLU activation, and spatial pooling. Adaptive global average pooling reduces the final feature map to a 256-dimensional representation, followed by dropout and a 16-class linear classifier.
+
+The model contains 392,912 trainable parameters.
+
+The baseline uses class-weighted cross-entropy:
+
+\[
+\mathcal{L}
+=
+-\frac{1}{B}
+\sum_{i=1}^{B}
+w_{y_i}\log p(y_i\mid x_i),
+\]
+
+where \(w_{y_i}\) is the class weight associated with the ground-truth class.
+
+\subsection{CNN + BiLSTM}
+
+The CNN feature maps are converted into a temporal sequence. A two-layer bidirectional LSTM with hidden size 128 processes the sequence. The bidirectional outputs are pooled temporally before classification.
+
+The model contains 3,018,448 parameters.
+
+\subsection{CNN + Transformer}
+
+The CNN front-end is followed by a projection from 2,048 dimensions to a 256-dimensional token representation. Four Transformer encoder layers are used with:
+
+\begin{itemize}
+    \item \(d_{\mathrm{model}}=256\);
+    \item 8 attention heads;
+    \item feed-forward dimension 512;
+    \item dropout 0.1;
+    \item learned positional embeddings;
+    \item a CLS token.
+\end{itemize}
+
+The final CLS representation is passed to the classifier. The model contains 3,047,376 parameters.
+
+\subsection{CNN + Transformer + Metadata}
+
+The Transformer audio representation is combined with a metadata branch. The metadata branch produces a 128-dimensional embedding from an 86-dimensional metadata representation.
+
+The metadata features include:
+
+\begin{itemize}
+    \item track bit rate;
+    \item duration;
+    \item track number;
+    \item license information, with missing license values represented as unknown.
+\end{itemize}
+
+Potential label leakage and engagement-related metadata were excluded, including genre labels, genre aggregates, listens, favorites, comments, and interest-related fields.
+
+The audio representation has dimension 256 and the metadata representation has dimension 128. They are concatenated and passed through a classifier.
+
+\subsection{CNN + BiLSTM + Attention}
+
+An attention pooling layer was added to the BiLSTM representation to learn a weighted combination of temporal states rather than using only mean temporal pooling.
+
+The model contains 3,051,473 parameters.
+
+\subsection{Multi-Scale CNN}
+
+The multi-scale CNN uses parallel convolutional branches with kernel sizes 3, 5, and 7. The branches are concatenated and followed by additional convolutional processing and adaptive pooling.
+
+The model contains 403,216 parameters.
+
+\section{Class-Imbalance Experiments}
+
+The severe class imbalance motivates a separate set of controlled experiments.
+
+\subsection{Smoothed Class Weights}
+
+
+Instead of using full inverse-frequency weighting, a family of smoothed weights is evaluated:
+
+\[
+w_c =
+\left(\frac{N}{N_c}\right)^\alpha,
+\]
+
+where \(N\) is the total number of training samples, \(N_c\) is the number of samples in class \(c\), and \(\alpha\) controls the strength of reweighting.
+
+Values
+
+\[
+\alpha\in\{0.25,0.50,0.75,1.00\}
+\]
+
+are evaluated.
+
+\subsection{SpecAugment}
+
+SpecAugment-style masking is applied to the training Mel spectrograms. The configuration masks up to 12 frequency bins and 80 time frames with probability 0.5. The validation and test representations are not augmented.
+
+\subsection{Mixup}
+
+Mixup combines pairs of training examples and labels using a Beta-distributed mixing coefficient. The experiment uses
+
+\[
+\alpha=0.4
+\]
+
+with probability 0.5.
+
+\subsection{Focal Loss}
+
+Focal Loss is evaluated with focusing parameters
+
+\[
+\gamma\in\{1,2,3\}.
+\]
+
+The purpose is to reduce the relative contribution of already-easy training examples and emphasize harder examples.
+
+\subsection{Balanced Sampling}
+
+A WeightedRandomSampler uses inverse class frequency to sample training examples with replacement. The number of samples per epoch is kept equal to the size of the original training set.
+
+\subsection{Decoupled Training}
+
+The final imbalance strategy separates representation learning from classifier adaptation.
+
+In Stage 1, the CNN is trained using ordinary unweighted cross-entropy on the original imbalanced training distribution. In Stage 2, the learned feature extractor is frozen, the final classifier is reinitialized, and classifier training uses inverse-frequency balanced sampling.
+
+This procedure is intended to avoid forcing the feature extractor to learn under extreme class reweighting while still allowing the classifier decision boundaries to adapt to minority classes.
+
+\section{Experimental Protocol}
+
+All experiments use the same frozen train, validation, and test manifests. Model selection is based on validation Macro-F1. The test set is reserved for final evaluation.
+
+The standard CNN training configuration uses:
+
+\begin{itemize}
+    \item batch size: 32;
+    \item maximum epochs: 30;
+    \item learning rate: \(10^{-3}\);
+    \item AdamW optimizer;
+    \item weight decay: \(10^{-4}\);
+    \item ReduceLROnPlateau scheduler;
+    \item scheduler patience: 2;
+    \item scheduler factor: 0.5;
+    \item early-stopping patience: 7.
+\end{itemize}
+
+The primary evaluation metrics are accuracy, balanced accuracy, macro-F1, and weighted-F1.
+
+Accuracy is
+
+\[
+\mathrm{Accuracy}=\frac{\text{correct predictions}}{\text{total predictions}}.
+\]
+
+Balanced accuracy is the average recall across classes:
+
+\[
+\mathrm{Balanced\ Accuracy}
+=
+\frac{1}{C}
+\sum_{c=1}^{C}
+\mathrm{Recall}_c.
+\]
+
+Macro-F1 gives every class equal weight:
+
+\[
+\mathrm{Macro\text{-}F1}
+=
+\frac{1}{C}
+\sum_{c=1}^{C}F1_c.
+\]
+
+Weighted-F1 weights each class by its number of true examples.
+
+Macro-F1 and balanced accuracy are particularly important because the dataset is strongly imbalanced.
+
+\section{Results}
+
+\subsection{Traditional and Deep-Learning Comparison}
+
+\reportfigure{deep_model_performance_comparison.png}{Comparison of the evaluated deep-learning architectures on the test set. The results show that the basic CNN outperforms the evaluated recurrent and Transformer extensions under the chosen experimental configuration.}
+
+\reportfigure{overall_test_performance.png}{Overall test-set comparison across traditional baselines, the CNN baseline, and the investigated imbalance and architectural strategies.}
+
+\reportfigure{deep_model_macro_f1_vs_model_size.png}{Test macro-F1 compared with model parameter count for the evaluated deep-learning architectures. Greater parameter count does not consistently correspond to higher classification performance.}
+
+
+Table~\ref{tab:main_results} summarizes the principal test-set results.
+
+\begin{table}[H]
+\centering
+\caption{Test-set performance of the evaluated models. Values are percentages.}
+\label{tab:main_results}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & Accuracy & Bal. Acc. & Macro-F1 & Weighted-F1\\
+\midrule
+Logistic Regression & 53.23 & 38.78 & 35.28 & 55.72\\
+SVM (RBF) & 63.65 & 41.61 & 43.05 & 61.87\\
+MLP & 58.20 & 43.87 & 41.49 & 59.54\\
+CNN & 60.61 & 51.58 & 45.27 & 62.43\\
+CNN + BiLSTM & 57.50 & 45.65 & 41.16 & 59.19\\
+CNN + Transformer & 48.60 & 36.80 & 27.67 & 48.45\\
+CNN + Transformer + Metadata & 40.98 & 32.21 & 29.38 & 44.92\\
+CNN + BiLSTM + Attention & 58.55 & 44.31 & 39.32 & 59.75\\
+CNN + SpecAugment & 58.20 & 49.50 & 42.79 & 60.07\\
+CNN + Mixup & 60.93 & 52.45 & 44.40 & 62.23\\
+CNN + Balanced Sampling & 62.79 & 47.94 & 44.52 & 63.81\\
+CNN + Decoupled Training & 62.52 & 54.37 & 45.65 & 64.50\\
+CNN + Multi-Scale & 59.84 & 47.99 & 41.62 & 60.98\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The RBF SVM obtains the highest test accuracy at 63.65\%. The decoupled CNN obtains the highest balanced accuracy, macro-F1, and weighted-F1 among the evaluated models, with 54.37\%, 45.65\%, and 64.50\%, respectively.
+
+\subsection{CNN and Decoupled Training}
+
+The CNN baseline achieves:
+
+\[
+60.61\%\ \text{accuracy},\quad
+51.58\%\ \text{balanced accuracy},\quad
+45.27\%\ \text{macro-F1},\quad
+62.43\%\ \text{weighted-F1}.
+\]
+
+Decoupled training changes these values to:
+
+\[
+62.52\%,\quad
+54.37\%,\quad
+45.65\%,\quad
+64.50\%.
+\]
+
+The corresponding changes are:
+
+\begin{table}[H]
+\centering
+\caption{Change from CNN baseline to decoupled training.}
+\label{tab:decoupled_delta}
+\begin{tabular}{lrr}
+\toprule
+Metric & CNN & Decoupled\\
+\midrule
+Accuracy & 60.61 & 62.52\\
+Balanced Accuracy & 51.58 & 54.37\\
+Macro-F1 & 45.27 & 45.65\\
+Weighted-F1 & 62.43 & 64.50\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Thus, decoupled training improves all four reported metrics relative to the original CNN.
+
+\subsection{Smoothed Class Weights}
+
+\begin{table}[H]
+\centering
+\caption{CNN results under different class-weight smoothing strengths.}
+\label{tab:smoothed}
+\begin{tabular}{lrrrr}
+\toprule
+$\alpha$ & Accuracy & Bal. Acc. & Macro-F1 & Weighted-F1\\
+\midrule
+0.25 & 63.80 & 42.96 & 40.99 & 60.54\\
+0.50 & 62.36 & 50.15 & 44.21 & 62.64\\
+0.75 & 62.36 & 50.91 & 44.15 & 62.54\\
+1.00 & 60.26 & 50.62 & 44.74 & 61.65\\
+\midrule
+Original CNN & 60.61 & 51.58 & 45.27 & 62.43\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+None of the smoothed class-weight configurations improves the original CNN across all metrics.
+
+\subsection{Focal Loss}
+
+\begin{table}[H]
+\centering
+\caption{Focal Loss results for different focusing parameters.}
+\label{tab:focal}
+\begin{tabular}{lrrrr}
+\toprule
+$\gamma$ & Accuracy & Bal. Acc. & Macro-F1 & Weighted-F1\\
+\midrule
+1 & 56.22 & 43.33 & 36.08 & 57.44\\
+2 & 55.40 & 46.86 & 40.13 & 57.96\\
+3 & 55.56 & 42.93 & 35.27 & 56.30\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Focal Loss does not outperform the standard CNN. The best balanced accuracy among the three Focal Loss configurations is 46.86\% at \(\gamma=2\), which remains below the CNN baseline.
+
+\section{Per-Class Analysis}
+
+\reportfigure{cnn_vs_decoupled_class_f1_change.png}{Change in per-class F1 score from the CNN baseline to decoupled training. Positive and negative changes demonstrate that the improvement in aggregate metrics is accompanied by class-specific precision-recall trade-offs.}
+
+
+The per-class results show why aggregate accuracy alone is insufficient for this dataset.
+
+\begin{table}[H]
+\centering
+\caption{Per-class precision, recall, and F1 for CNN and decoupled training.}
+\label{tab:per_class}
+\scriptsize
+\begin{tabular}{lrrrrrr}
+\toprule
+& \multicolumn{3}{c}{CNN} & \multicolumn{3}{c}{Decoupled}\\
+Class & P & R & F1 & P & R & F1\\
+\midrule
+Blues & .210 & .375 & .270 & .102 & .625 & .175\\
+Classical & .620 & .855 & .720 & .587 & .871 & .701\\
+Country & .160 & .444 & .230 & .214 & .500 & .300\\
+Easy Listening & .000 & .000 & .000 & .000 & .000 & .000\\
+Electronic & .830 & .684 & .750 & .863 & .718 & .784\\
+Experimental & .390 & .418 & .410 & .452 & .418 & .434\\
+Folk & .320 & .368 & .340 & .357 & .362 & .359\\
+Hip-Hop & .730 & .755 & .740 & .780 & .727 & .753\\
+Instrumental & .310 & .374 & .340 & .394 & .362 & .377\\
+International & .490 & .373 & .420 & .679 & .373 & .481\\
+Jazz & .400 & .538 & .460 & .357 & .641 & .459\\
+Old-Time/Historic & .940 & 1.000 & .970 & .943 & .980 & .962\\
+Pop & .230 & .378 & .290 & .217 & .261 & .237\\
+Rock & .870 & .721 & .790 & .845 & .777 & .810\\
+Soul-RnB & .120 & .143 & .130 & .140 & .167 & .152\\
+Spoken & .250 & .833 & .380 & .193 & .917 & .319\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Decoupled training produces noticeable gains in several classes. F1 improves for Country, International, Instrumental, Electronic, Experimental, Rock, Soul-RnB, Folk, Hip-Hop, and Jazz. For example, Electronic F1 increases from 0.750 to 0.784 and Rock F1 increases from 0.790 to 0.810.
+
+However, the improvement is not uniform. Blues, Pop, and Spoken experience lower F1. Blues recall increases from 37.5\% to 62.5\%, but precision falls substantially, resulting in a lower F1 score. Spoken recall increases from 83.3\% to 91.7\%, while precision decreases from 25.0\% to 19.3\%.
+
+This behavior is consistent with the role of decoupled training: the classifier is encouraged to allocate more decision space to minority classes, which can increase minority recall while also increasing false positives.
+
+\section{Confusion Analysis}
+
+\reportfigure{cnn_normalized_confusion_matrix.png}{Normalized confusion matrix for the CNN baseline. Row normalization emphasizes recall and class-specific error patterns despite the strong class imbalance.}
+
+\reportfigure{decoupled_normalized_confusion_matrix.png}{Normalized confusion matrix for the CNN with decoupled training. Compared with the baseline, the classifier changes its allocation of predictions across minority and majority classes.}
+
+
+The confusion matrices provide additional evidence of the trade-offs introduced by classifier rebalancing.
+
+For the CNN, Electronic and Rock have relatively strong recognition performance, while many minority classes are frequently confused with larger neighboring classes. The CNN correctly classifies 432 of 632 Electronic test tracks and 512 of 710 Rock test tracks.
+
+After decoupled training, the number of correctly classified Electronic tracks increases to 454 and the number of correctly classified Rock tracks increases to 552. These changes contribute to the increase in both overall accuracy and weighted-F1.
+
+The classifier also changes its treatment of several minority classes. For example, the number of correctly classified Blues tracks increases from 3 to 5, while the number of Blues false positives increases substantially. Similar precision-recall trade-offs appear for Spoken.
+
+The confusion matrices should therefore be interpreted jointly with balanced accuracy and macro-F1 rather than using accuracy alone.
+
+\section{Discussion}
+
+\subsection{CNN versus Temporal Models}
+
+The CNN baseline outperforms both CNN+BiLSTM and CNN+BiLSTM+Attention on the reported test metrics. The CNN obtains 45.27\% macro-F1, compared with 41.16\% for CNN+BiLSTM and 39.32\% for CNN+BiLSTM+Attention.
+
+This result indicates that adding an explicit temporal modeling stage did not automatically produce a better representation for the classification task. The additional recurrent parameters may have increased optimization difficulty without providing a sufficiently useful temporal abstraction under the chosen fixed-length representation and training configuration.
+
+\subsection{Transformer Results}
+
+The CNN+Transformer model performs substantially below the CNN baseline. Its test macro-F1 is 27.67\%, compared with 45.27\% for the CNN.
+
+The CNN+Transformer+Metadata model obtains 29.38\% macro-F1. Thus, metadata increases Transformer macro-F1 by 1.71 percentage points relative to the audio-only Transformer. However, the metadata model remains below the CNN on accuracy, balanced accuracy, macro-F1, and weighted-F1.
+
+The result suggests that metadata fusion provided a small improvement within the Transformer family but did not compensate for the much weaker audio representation produced by that architecture under the experimental configuration.
+
+\subsection{Why Accuracy and Macro-F1 Differ}
+
+The dataset contains very large classes such as Rock and Electronic and extremely small classes such as Easy Listening, Blues, Soul-RnB, and Spoken. A classifier can therefore obtain relatively high accuracy while performing poorly on minority classes.
+
+The SVM illustrates this behavior. It achieves the highest test accuracy among the evaluated models, 63.65\%, but its balanced accuracy is only 41.61\%. In contrast, the CNN has lower accuracy at 60.61\% but substantially higher balanced accuracy at 51.58\%.
+
+This difference demonstrates why multiple evaluation metrics are necessary for the task.
+
+\subsection{Effect of Decoupled Training}
+
+Decoupled training is the most consistently successful CNN-based strategy in the study. Its test accuracy increases by 1.91 percentage points, balanced accuracy by 2.79 percentage points, macro-F1 by 0.38 percentage points, and weighted-F1 by 2.07 percentage points relative to the CNN baseline.
+
+The improvement in balanced accuracy is particularly relevant because balanced accuracy gives each class equal importance. The increase suggests that classifier adaptation after representation learning helps distribute predictive performance more evenly across classes.
+
+At the same time, the per-class results show that this is not a uniformly beneficial transformation. Some minority classes gain recall but lose precision, while some classes such as Pop lose F1. Therefore, the aggregate improvement should be interpreted as a change in the overall class-balance trade-off rather than as an improvement for every individual genre.
+
+\section{Limitations}
+
+Several limitations should be considered when interpreting the results.
+
+\begin{enumerate}
+    \item \textbf{Dataset imbalance:} Several classes contain very few examples, limiting the amount of information available for learning robust class-specific representations.
+
+    \item \textbf{Fixed 30-second representation:} Every track is represented using a single fixed 30-second segment after padding or truncation. Longer-term musical structure may therefore not be fully represented.
+
+    \item \textbf{Single primary audio representation:} The deep models use Mel spectrograms. Other representations such as chroma, constant-Q transforms, or learned raw-waveform representations were not systematically evaluated.
+
+    \item \textbf{Architecture sensitivity:} The Transformer and recurrent models were evaluated using specific configurations. The results should not be interpreted as evidence that Transformers or recurrent models are inherently unsuitable for music classification.
+
+    \item \textbf{Metadata scope:} Only a limited set of non-leaky metadata fields was used in the metadata experiment. A broader metadata representation might produce different results.
+
+    \item \textbf{External validity:} The experiments use the FMA Medium dataset and its predefined genre taxonomy. Performance on other datasets or real-world genre taxonomies may differ.
+
+    \item \textbf{Very small classes:} Results for classes with only a few dozen test examples have high statistical variability. Per-class metrics for these categories should therefore be interpreted cautiously.
+\end{enumerate}
+
+\section{Reproducibility}
+
+The report figures are generated from the project's analysis notebooks and stored under \texttt{results/figures}. The report uses the following eight figures: genre distribution, dataset cleaning summary, deep-model performance comparison, overall test performance, macro-F1 versus model size, class-weight strength, CNN versus decoupled per-class F1 change, and normalized confusion matrices for the CNN and decoupled models.
+
+
+
+The project uses a frozen set of cleaned manifests:
+
+\begin{itemize}
+    \item \texttt{data/clean\_train.csv}
+    \item \texttt{data/clean\_validation.csv}
+    \item \texttt{data/clean\_test.csv}
+\end{itemize}
+
+The preprocessing configuration is stored in \texttt{configs/default.yaml}. Mel spectrograms are cached under \texttt{data/mel\_cache}. Evaluation metrics are stored under \texttt{results/metrics}, figures under \texttt{results/figures}, and selected final model checkpoints under \texttt{results/checkpoints}.
+
+The repository also provides notebooks for dataset analysis, baseline comparison, deep-model comparison, imbalance analysis, confusion analysis, and final-result presentation.
+
+\section{Conclusion}
+
+MelodyMatch-V2 presents a systematic comparison of traditional machine-learning models, convolutional neural networks, temporal architectures, Transformers, metadata fusion, and imbalance-handling strategies for music genre classification on FMA Medium.
+
+The experiments show that increased model complexity does not necessarily translate into improved classification performance. The standard CNN provides a strong deep-learning baseline, outperforming the evaluated recurrent and Transformer extensions on the principal metrics. The RBF SVM achieves the highest overall test accuracy at 63.65\%, demonstrating that FMA's provided feature representation remains competitive.
+
+For the deep-learning models, decoupled CNN training produces the strongest overall results among the evaluated configurations. It achieves 62.52\% test accuracy, 54.37\% balanced accuracy, 45.65\% macro-F1, and 64.50\% weighted-F1. Relative to the original CNN, it improves all four metrics.
+
+The per-class analysis shows that the gains arise from a redistribution of classifier behavior rather than uniform improvement across all genres. Several classes improve substantially, while Blues, Pop, and Spoken experience lower F1. This highlights the importance of examining class-level behavior when evaluating highly imbalanced music datasets.
+
+Overall, the study supports a practical research conclusion: for this FMA Medium configuration, improving how the classifier handles the imbalanced label distribution can be more effective than adding increasingly complex temporal or attention-based architectures.
+
+\section*{Acknowledgements}
+
+This work uses the Free Music Archive dataset and associated metadata. The project also builds on the original MelodyMatch implementation and extends it into a systematic research-oriented experimental pipeline.
+
+\begin{thebibliography}{99}
+
+\bibitem{fma}
+M. Defferrard, K. Benzi, P. Vandergheynst, and X. Bresson,
+``FMA: A Dataset for Music Analysis,''
+arXiv preprint arXiv:1612.01840, 2017.
+
+\bibitem{fmawebsite}
+M. Defferrard et al.,
+``FMA: A Dataset For Music Analysis,''
+GitHub repository.
+\url{https://github.com/mdeff/fma}.
+
+\bibitem{mel}
+S. S. Stevens, J. Volkmann, and E. B. Newman,
+``A Scale for the Measurement of the Psychological Magnitude Pitch,''
+Journal of the Acoustical Society of America, vol. 8, no. 3, pp. 185--190, 1937.
+
+\bibitem{cnn}
+Y. LeCun, Y. Bengio, and G. Hinton,
+``Deep Learning,''
+Nature, vol. 521, pp. 436--444, 2015.
+
+\bibitem{lstm}
+S. Hochreiter and J. Schmidhuber,
+``Long Short-Term Memory,''
+Neural Computation, vol. 9, no. 8, pp. 1735--1780, 1997.
+
+\bibitem{transformer}
+A. Vaswani et al.,
+``Attention Is All You Need,''
+Advances in Neural Information Processing Systems, 2017.
+
+\bibitem{specaugment}
+D. S. Park et al.,
+``SpecAugment: A Simple Data Augmentation Method for Automatic Speech Recognition,''
+Interspeech, 2019.
+
+\bibitem{mixup}
+H. Zhang, M. Cisse, Y. N. Dauphin, and D. Lopez-Paz,
+``mixup: Beyond Empirical Risk Minimization,''
+International Conference on Learning Representations, 2018.
+
+\bibitem{focal}
+T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar,
+``Focal Loss for Dense Object Detection,''
+IEEE International Conference on Computer Vision, 2017.
+
+\bibitem{sklearn}
+F. Pedregosa et al.,
+``Scikit-learn: Machine Learning in Python,''
+Journal of Machine Learning Research, vol. 12, pp. 2825--2830, 2011.
+
+\bibitem{librosa}
+B. McFee et al.,
+``librosa: Audio and Music Signal Analysis in Python,''
+Proceedings of the 14th Python in Science Conference, 2015.
+
+\end{thebibliography}
+
+\end{document}
