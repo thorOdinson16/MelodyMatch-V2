@@ -1,0 +1,6 @@
+,Accuracy,Balanced Accuracy,Macro-F1,Weighted-F1
+CNN,60.6143,51.5804,45.2737,62.4294
+SpecAugment,58.2037,49.4992,42.7882,60.073
+Mixup,60.9253,52.447,44.3985,62.2266
+Balanced Sampling,62.7916,47.945,44.5231,63.8112
+Decoupled Training,62.5194,54.366,45.6475,64.499

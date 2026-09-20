@@ -1,0 +1,14 @@
+Model,Category,Accuracy,Balanced Accuracy,Macro-F1,Weighted-F1
+Logistic Regression,Traditional,53.23,38.78,35.28,55.72
+SVM (RBF),Traditional,63.65,41.61,43.05,61.87
+MLP,Traditional,58.2,43.87,41.49,59.54
+CNN,Deep Learning,60.61,51.58,45.27,62.43
+CNN + BiLSTM,Deep Learning,57.5,45.65,41.16,59.19
+CNN + Transformer,Deep Learning,48.6,36.8,27.67,48.45
+CNN + Transformer + Metadata,Deep Learning,40.98,32.21,29.38,44.92
+CNN + BiLSTM + Attention,Deep Learning,58.55,44.31,39.32,59.75
+CNN + Multi-Scale,Deep Learning,59.84,47.99,41.62,60.98
+CNN + SpecAugment,Imbalance / Augmentation,58.2,49.5,42.79,60.07
+CNN + Mixup,Imbalance / Augmentation,60.93,52.45,44.4,62.23
+CNN + Balanced Sampling,Imbalance,62.79,47.95,44.52,63.81
+CNN + Decoupled Training,Imbalance,62.52,54.37,45.65,64.5
