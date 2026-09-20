@@ -3,7 +3,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from app.inference import MelodyMatchInference
+from inference import MelodyMatchInference
 
 
 # ============================================================
