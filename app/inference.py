@@ -1,13 +1,29 @@
 from pathlib import Path
+import sys
 
 import torch
+
+
+# ============================================================
+# Project paths
+# ============================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = PROJECT_ROOT / "src"
+
+# Make src/melodymatch importable on Streamlit Cloud
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 
 from melodymatch.data.labels import GENRE_TO_INDEX
 from melodymatch.data.preprocessing import audio_to_mel
 from melodymatch.models.cnn import CNNBaseline
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# ============================================================
+# Model configuration
+# ============================================================
 
 CHECKPOINT_PATH = (
     PROJECT_ROOT
@@ -25,6 +41,10 @@ INDEX_TO_GENRE = {
     for genre, index in GENRE_TO_INDEX.items()
 }
 
+
+# ============================================================
+# Inference
+# ============================================================
 
 class MelodyMatchInference:
 
@@ -52,14 +72,18 @@ class MelodyMatchInference:
         self.stage = checkpoint.get("stage")
 
     def _predict_window(self, audio_path: str):
-        # The trained CNN expects the same 30-second preprocessing
-        # used during training.
+        """
+        Predict one 30-second audio window.
+        """
+
         mel = audio_to_mel(audio_path)
 
         if not isinstance(mel, torch.Tensor):
             mel = torch.as_tensor(mel)
 
-        # [1, 128, 1292] -> [1, 1, 128, 1292]
+        # [1, 128, 1292]
+        #       ↓
+        # [1, 1, 128, 1292]
         mel = mel.unsqueeze(0).to(
             self.device,
             non_blocking=True,
@@ -67,33 +91,65 @@ class MelodyMatchInference:
 
         with torch.no_grad():
             logits = self.model(mel)
-            return torch.softmax(logits, dim=1)[0].cpu()
+            probabilities = torch.softmax(
+                logits,
+                dim=1,
+            )[0]
 
-    def predict(self, audio_path: str, top_k: int = 3):
+        return probabilities.cpu()
+
+    def predict(
+        self,
+        audio_path: str,
+        top_k: int = 3,
+    ):
+        """
+        Predict genre for a single 30-second window.
+        """
+
         probabilities = self._predict_window(audio_path)
-        return self._format_predictions(probabilities, top_k)
+
+        return self._format_predictions(
+            probabilities,
+            top_k,
+        )
 
     def predict_windows(
         self,
         audio_paths: list[str],
         top_k: int = 3,
     ):
-        """Predict several 30-second windows and average their outputs."""
+        """
+        Predict several 30-second windows and
+        average their probability distributions.
+        """
+
         if not audio_paths:
-            raise ValueError("No audio windows were provided.")
+            raise ValueError(
+                "No audio windows were provided."
+            )
 
         probabilities = torch.stack(
-            [self._predict_window(path) for path in audio_paths]
+            [
+                self._predict_window(path)
+                for path in audio_paths
+            ]
         ).mean(dim=0)
 
-        return self._format_predictions(probabilities, top_k)
+        return self._format_predictions(
+            probabilities,
+            top_k,
+        )
 
     @staticmethod
     def _format_predictions(
         probabilities: torch.Tensor,
         top_k: int,
     ):
-        top_k = min(top_k, len(INDEX_TO_GENRE))
+        top_k = min(
+            top_k,
+            len(INDEX_TO_GENRE),
+        )
 
         values, indices = torch.topk(
             probabilities,
@@ -105,5 +161,8 @@ class MelodyMatchInference:
                 "genre": INDEX_TO_GENRE[index.item()],
                 "probability": probability.item(),
             }
-            for probability, index in zip(values, indices)
+            for probability, index in zip(
+                values,
+                indices,
+            )
         ]
