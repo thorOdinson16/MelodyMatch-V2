@@ -1,5 +1,5 @@
-% MelodyMatch-V2 Research Report
-% Compile with: pdflatex report.tex (run twice for references/table of contents as needed)
+% Compile with: pdflatex MelodyMatch_V2_Report.tex
+% Run twice to resolve references.
 
 \documentclass[11pt,a4paper]{article}
 
@@ -166,7 +166,7 @@ The cleaning process therefore removed 20 tracks:
     \item 5 extreme-duration tracks shorter than 10 seconds.
 \end{itemize}
 
-The audio files themselves were not modified or deleted as part of the duration-outlier decision. The exclusions were recorded in the cleaned manifests.
+The original FMA audio files were not modified or deleted. The 20 excluded tracks were removed only from the cleaned manifests used for subsequent experiments.
 
 The resulting dataset contains 24,980 usable tracks.
 
@@ -663,8 +663,7 @@ Several limitations should be considered when interpreting the results.
 
 \section{Reproducibility}
 
-The report figures are generated from the project's analysis notebooks and stored under \texttt{results/figures}. The report uses the following eight figures: genre distribution, dataset cleaning summary, deep-model performance comparison, overall test performance, macro-F1 versus model size, class-weight strength, CNN versus decoupled per-class F1 change, and normalized confusion matrices for the CNN and decoupled models.
-
+The report figures are generated from the project's analysis notebooks and stored under \texttt{results/figures}. The report uses the following eight figures: genre distribution, dataset cleaning summary, deep-model performance comparison, overall test performance, macro-F1 versus model size, CNN versus decoupled per-class F1 change, and normalized confusion matrices for the CNN and decoupled models.
 
 
 The project uses a frozen set of cleaned manifests:
