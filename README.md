@@ -309,7 +309,6 @@ MelodyMatch/
 │       ├── models/
 │       └── training/
 │
-├── configs/
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
