@@ -1,0 +1,52 @@
+project:
+  name: MelodyMatch-V2
+  version: "2.0.0"
+
+dataset:
+  name: FMA Medium
+  num_classes: 16
+  train_manifest: data/clean_train.csv
+  validation_manifest: data/clean_validation.csv
+  test_manifest: data/clean_test.csv
+  mel_cache: data/mel_cache
+
+audio:
+  sample_rate: 22050
+  duration_seconds: 30
+  mono: true
+
+mel_spectrogram:
+  n_mels: 128
+  n_fft: 2048
+  hop_length: 512
+  fmin: 20
+  fmax: 11025
+  power: 2.0
+  normalization: per_spectrogram_zscore
+
+training:
+  batch_size: 32
+  max_epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 7
+  scheduler_patience: 2
+  scheduler_factor: 0.5
+  num_workers: 0
+
+imbalance:
+  strategy: class_weighted_cross_entropy
+
+evaluation:
+  primary_metric: macro_f1
+  metrics:
+    - accuracy
+    - balanced_accuracy
+    - macro_f1
+    - weighted_f1
+
+paths:
+  checkpoints: results/checkpoints
+  metrics: results/metrics
+  figures: results/figures
+  logs: logs
